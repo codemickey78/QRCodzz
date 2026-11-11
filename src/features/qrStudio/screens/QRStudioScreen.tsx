@@ -40,7 +40,7 @@ import {
   validateQRDesign,
 } from '../qrDesignValidation';
 import {usePremium} from '../../premium';
-import {createCodePngDataUri, saveCodePngForExport} from '../../export';
+import {createCodePngDataUri, exportCodePngAfterReward} from '../../export';
 import {SharingService} from '../../../services/sharing/SharingService';
 
 type QRStudioRoute = RouteProp<CreateStackParamList, 'QRStudio'>;
@@ -350,30 +350,30 @@ export function QRStudioScreen() {
 
     setIsExporting(true);
     try {
-      const reward = await requestRewardedAccess('export');
-      if (reward.status !== 'earned') {
+      const result = await exportCodePngAfterReward(requestRewardedAccess, async () => {
+        const savedCode = code ?? (await saveDesign());
+        if (!savedCode) {
+          throw new Error('Add data to your QR code before exporting.');
+        }
+
+        return createCodePngDataUri(
+          {...savedCode, content, designConfig: sanitizeSupportedConfig(config)},
+          {
+            backgroundTransparent: false,
+            format: 'png',
+            resolution: 1024,
+          },
+        );
+      });
+      if (result.reward.status !== 'earned') {
         showToast(
           'Reward unavailable',
-          reward.message ?? 'Try again when the rewarded ad is ready.',
+          result.reward.message ?? 'Try again when the rewarded ad is ready.',
         );
         return;
       }
 
-      const savedCode = code ?? (await saveDesign());
-      if (!savedCode) {
-        return;
-      }
-
-      const image = await createCodePngDataUri(
-        {...savedCode, content, designConfig: sanitizeSupportedConfig(config)},
-        {
-          backgroundTransparent: false,
-          format: 'png',
-          resolution: 1024,
-        },
-      );
-
-      const exportFile = await saveCodePngForExport(image);
+      const {image, exportFile} = result;
       await SharingService.shareFile(exportFile.filePath, image.filename);
       showToast(
         'PNG ready',

@@ -30,7 +30,7 @@ import {
 import {getBwipBarcodeDefinition} from '../../../services/barcode/bwipBarcodeCatalog';
 import {useAppToast} from '../../../components/feedback/AppToast';
 import {usePremium} from '../../premium';
-import {createCodePngDataUri, saveCodePngForExport} from '../../export';
+import {createCodePngDataUri, exportCodePngAfterReward} from '../../export';
 import {SharingService} from '../../../services/sharing/SharingService';
 import {analyticsService} from '../../../services/analytics/PrivacySafeAnalyticsService';
 
@@ -198,21 +198,22 @@ export function BarcodePreviewScreen() {
 
     setIsExporting(true);
     try {
-      const access = await requestRewardedAccess('export');
-      if (access.status !== 'earned') {
+      const result = await exportCodePngAfterReward(requestRewardedAccess, () =>
+        createCodePngDataUri(code, {
+          backgroundTransparent: false,
+          format: 'png',
+          resolution: 512,
+        }),
+      );
+      if (result.reward.status !== 'earned') {
         showToast(
           'Reward required',
-          access.message ?? 'Watch a rewarded ad to export this barcode.',
+          result.reward.message ?? 'Watch a rewarded ad to export this barcode.',
         );
         return;
       }
 
-      const image = await createCodePngDataUri(code, {
-        backgroundTransparent: false,
-        format: 'png',
-        resolution: 512,
-      });
-      const exportFile = await saveCodePngForExport(image);
+      const {image, exportFile} = result;
       await SharingService.shareFile(exportFile.filePath, image.filename);
       void analyticsService.track('code_exported', {
         format: code.format,

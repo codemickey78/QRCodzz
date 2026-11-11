@@ -34,7 +34,7 @@ import {
   getCodePreviewText,
   isSensitiveCode,
 } from '../../security';
-import { createCodePngDataUri, saveCodePngForExport } from '../../export';
+import {createCodePngDataUri, exportCodePngAfterReward} from '../../export';
 import { SharingService } from '../../../services/sharing/SharingService';
 import {analyticsService} from '../../../services/analytics/PrivacySafeAnalyticsService';
 import { useTheme } from '../../../theme/useTheme';
@@ -57,6 +57,7 @@ export function CodeDetailsScreen() {
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [title, setTitle] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
   const [deleteArmed, setDeleteArmed] = useState(false);
   const [folderSheetVisible, setFolderSheetVisible] = useState(false);
   const [renameSheetVisible, setRenameSheetVisible] = useState(false);
@@ -407,29 +408,51 @@ export function CodeDetailsScreen() {
   }, [code, showToast]);
 
   const exportPng = useCallback(async () => {
-    if (!code) {
+    if (!code || isExporting) {
       return;
     }
 
-    const image = await createCodePngDataUri(code, {
-      backgroundTransparent:
-        code.type === 'qr' && Boolean(code.designConfig?.backgroundTransparent),
-      format: 'png',
-      resolution: code.type === 'qr' ? 1024 : 512,
-    });
-    const exportFile = await saveCodePngForExport(image);
-    await SharingService.shareFile(exportFile.filePath, image.filename);
-    void analyticsService.track('code_exported', {
-      format: code.format,
-      type: code.type,
-    });
-    showToast(
-      'PNG ready',
-      exportFile.savedToGallery
-        ? `${image.filename} was saved to Photos and opened for sharing.`
-        : `${image.filename} was generated for sharing.`,
-    );
-  }, [code, showToast]);
+    setIsExporting(true);
+    try {
+      const result = await exportCodePngAfterReward(requestRewardedAccess, () =>
+        createCodePngDataUri(code, {
+          backgroundTransparent:
+            code.type === 'qr' && Boolean(code.designConfig?.backgroundTransparent),
+          format: 'png',
+          resolution: code.type === 'qr' ? 1024 : 512,
+        }),
+      );
+      if (result.reward.status !== 'earned') {
+        showToast(
+          'Reward required',
+          result.reward.message ?? 'Watch a rewarded ad to export this image.',
+        );
+        return;
+      }
+
+      const {image, exportFile} = result;
+      await SharingService.shareFile(exportFile.filePath, image.filename);
+      void analyticsService.track('code_exported', {
+        format: code.format,
+        type: code.type,
+      });
+      showToast(
+        'PNG ready',
+        exportFile.savedToGallery
+          ? `${image.filename} was saved to Photos and opened for sharing.`
+          : `${image.filename} was generated for sharing.`,
+      );
+    } catch (error) {
+      showToast(
+        'Export failed',
+        error instanceof Error
+          ? error.message
+          : 'The image could not be exported. Try again.',
+      );
+    } finally {
+      setIsExporting(false);
+    }
+  }, [code, isExporting, requestRewardedAccess, showToast]);
 
   if (isLoading) {
     return (
@@ -575,6 +598,7 @@ export function CodeDetailsScreen() {
           />
           <ActionCard
             color="#7C3AED"
+            disabled={isExporting}
             icon={Download01Icon}
             label="Export PNG"
             onPress={() =>

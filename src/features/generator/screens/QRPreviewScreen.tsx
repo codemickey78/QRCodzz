@@ -12,7 +12,7 @@ import { AppScreen } from '../../../components/layout/AppScreen';
 import { PrimaryButton, SecondaryButton } from '../../../components/ui/Button';
 import { Card } from '../../../components/ui/Card';
 import { SectionHeader } from '../../../components/ui/SectionHeader';
-import {createCodePngDataUri, saveCodePngForExport} from '../../export';
+import {createCodePngDataUri, exportCodePngAfterReward} from '../../export';
 import { QRDesignPreview } from '../../qrStudio/components/QRDesignPreview';
 import { parseQRDesignConfig } from '../../qrStudio/qrDesignValidation';
 import {SharingService} from '../../../services/sharing/SharingService';
@@ -96,21 +96,22 @@ export function QRPreviewScreen() {
 
     setIsExporting(true);
     try {
-      const access = await requestRewardedAccess('export');
-      if (access.status !== 'earned') {
+      const result = await exportCodePngAfterReward(requestRewardedAccess, () =>
+        createCodePngDataUri(code, {
+          backgroundTransparent: Boolean(code.designConfig?.backgroundTransparent),
+          format: 'png',
+          resolution: 1024,
+        }),
+      );
+      if (result.reward.status !== 'earned') {
         showToast(
           'Reward required',
-          access.message ?? 'Watch a rewarded ad to export this QR code.',
+          result.reward.message ?? 'Watch a rewarded ad to export this QR code.',
         );
         return;
       }
 
-      const image = await createCodePngDataUri(code, {
-        backgroundTransparent: Boolean(code.designConfig?.backgroundTransparent),
-        format: 'png',
-        resolution: 1024,
-      });
-      const exportFile = await saveCodePngForExport(image);
+      const {image, exportFile} = result;
       await SharingService.shareFile(exportFile.filePath, image.filename);
       void analyticsService.track('qr_exported', {
         format: code.format,

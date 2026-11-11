@@ -5,6 +5,7 @@ import { CodeItem } from '../../database/entities/CodeItem';
 import { Collection } from '../../database/entities/Collection';
 import { Folder } from '../../database/entities/Folder';
 import { LocalDatabaseSchema } from '../../database/schema';
+import {RewardedAccessResult} from '../../services/purchase/PurchaseService';
 import {BarcodeRenderService} from '../../services/barcode/BarcodeRenderService';
 import {
   defaultQRDesignConfig,
@@ -345,6 +346,20 @@ export async function saveCodePngForExport(image: CodePngExport) {
     filePath,
     savedToGallery: false,
   };
+}
+
+export async function exportCodePngAfterReward(
+  requestRewardedAccess: (reason: 'export') => Promise<RewardedAccessResult>,
+  createImage: () => Promise<CodePngExport>,
+) {
+  const reward = await requestRewardedAccess('export');
+  if (reward.status !== 'earned') {
+    return {reward} as const;
+  }
+
+  const image = await createImage();
+  const exportFile = await saveCodePngForExport(image);
+  return {exportFile, image, reward} as const;
 }
 
 async function ensureAndroidGalleryWriteAccess() {
