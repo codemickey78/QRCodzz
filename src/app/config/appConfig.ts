@@ -1,7 +1,7 @@
 export const appConfig = {
   ads: {
     // Toggle this back to true after recording demo videos.
-    enabled: false,
+    enabled: true,
     androidAppId: 'ca-app-pub-3483260765526128~4762332468',
     iosAppId: 'ca-app-pub-3483260765526128~7771639188',
     testMode: false,
